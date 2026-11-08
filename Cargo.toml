@@ -1,0 +1,106 @@
+[package]
+name = "ledger-service"
+version = "0.1.0"
+edition = "2024"
+description = "A modern banking transaction service in Rust"
+authors = ["Ledger Team"]
+
+[dependencies]
+# ---------------------------------------------------------------------------
+# Web & Async Runtime
+# ---------------------------------------------------------------------------
+# Axum 0.8: HTTP framework built on Tower and Hyper.
+# Spring Boot equivalent: spring-boot-starter-web
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = ["cors", "trace", "request-id"] }
+hyper = "1"
+
+# ---------------------------------------------------------------------------
+# Serialization & Validation
+# ---------------------------------------------------------------------------
+# Serde: the standard Rust serialization framework.
+# Spring Boot equivalent: Jackson (ObjectMapper)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# Validator: input validation with derive macros.
+# Spring Boot equivalent: Bean Validation (@Valid, @NotNull, @Min, etc.)
+validator = { version = "0.20", features = ["derive"] }
+
+# ---------------------------------------------------------------------------
+# Database
+# ---------------------------------------------------------------------------
+# SQLx: async, compile-time checked SQL queries. No ORM.
+# Spring Boot equivalent: Spring Data JDBC / JdbcTemplate
+sqlx = { version = "0.8", features = [
+    "runtime-tokio",
+    "tls-rustls",
+    "postgres",
+    "macros",
+    "chrono",
+    "uuid",
+    "rust_decimal",
+    "migrate",
+] }
+
+# ---------------------------------------------------------------------------
+# Types & Utilities
+# ---------------------------------------------------------------------------
+# Chrono: date/time library. Spring Boot equivalent: java.time
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+# UUID with v4 (random) and v7 (time-ordered) support.
+# v7 is ideal for database primary keys — chronologically sortable, B-tree friendly.
+uuid = { version = "1", features = ["v4", "v7", "serde"] }
+# Exact decimal arithmetic for monetary values. NEVER use f32/f64 for money.
+# Spring Boot equivalent: java.math.BigDecimal
+rust_decimal = { version = "1.36", features = ["serde", "macros"] }
+
+# ---------------------------------------------------------------------------
+# Error Handling
+# ---------------------------------------------------------------------------
+# thiserror: derive macro for custom error types (domain/application errors).
+# Spring Boot equivalent: Custom exception classes
+thiserror = "2"
+# anyhow: flexible error type for application-level error handling with context.
+# Spring Boot equivalent: RuntimeException with message chaining
+anyhow = "1.0"
+
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
+# dotenvy: loads .env files into environment variables (maintained dotenv fork).
+# Spring Boot equivalent: application.properties / application.yml
+dotenvy = "0.15"
+
+# ---------------------------------------------------------------------------
+# Observability
+# ---------------------------------------------------------------------------
+# tracing: structured, context-aware logging and diagnostics.
+# Spring Boot equivalent: SLF4J + Logback with MDC (Mapped Diagnostic Context)
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
+
+# ---------------------------------------------------------------------------
+# HTTP Client
+# ---------------------------------------------------------------------------
+# Reqwest: ergonomic async HTTP client (uses Arc internally — cheap to clone).
+# Spring Boot equivalent: WebClient / RestTemplate
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+# ---------------------------------------------------------------------------
+# OpenAPI / Swagger (Phase 6)
+# ---------------------------------------------------------------------------
+utoipa = { version = "5", features = ["axum_extras", "chrono", "uuid", "decimal"] }
+# utoipa-swagger-ui and utoipa-axum will be enabled in Phase 6 for Swagger UI documentation
+# utoipa-swagger-ui = { version = "9", features = ["axum"] }
+# utoipa-axum = "0.2"
+
+[dev-dependencies]
+# Testcontainers: spins up real PostgreSQL in Docker for integration tests.
+# Spring Boot equivalent: @Testcontainers + @Container annotations
+testcontainers = "0.23"
+testcontainers-modules = { version = "0.11", features = ["postgres"] }
+# HTTP client for API integration tests
+reqwest = { version = "0.12", features = ["json"] }
+http-body-util = "0.1"
