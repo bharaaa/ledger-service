@@ -16,6 +16,7 @@
 //! In `AppState`, `HttpClient` and SQLx `PgPool` already wrap `Arc` internally.
 
 use crate::config::settings::Settings;
+use crate::infrastructure::database::pool::DbPool;
 use crate::infrastructure::external::http_client::HttpClient;
 
 /// Application state shared across all HTTP request handlers.
@@ -23,14 +24,16 @@ use crate::infrastructure::external::http_client::HttpClient;
 pub struct AppState {
     pub settings: Settings,
     pub http_client: HttpClient,
+    pub db_pool: DbPool,
 }
 
 impl AppState {
     /// Create a new `AppState` instance.
-    pub fn new(settings: Settings, http_client: HttpClient) -> Self {
+    pub fn new(settings: Settings, http_client: HttpClient, db_pool: DbPool) -> Self {
         Self {
             settings,
             http_client,
+            db_pool,
         }
     }
 }

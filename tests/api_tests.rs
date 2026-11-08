@@ -17,6 +17,7 @@ use serde_json::Value;
 use tower::ServiceExt;
 
 use ledger_service::config::settings::{DatabaseSettings, ServerSettings, Settings};
+use ledger_service::infrastructure::database::pool::create_pool_lazy;
 use ledger_service::infrastructure::external::http_client::HttpClient;
 use ledger_service::interfaces::http::middleware::request_id::REQUEST_ID_HEADER;
 use ledger_service::interfaces::http::routes::create_router;
@@ -32,11 +33,12 @@ fn test_app_state() -> AppState {
             url: "postgres://postgres:postgres@localhost:5432/ledger_test".to_string(),
             max_connections: 5,
             min_connections: 1,
-            acquire_timeout_seconds: 3,
+            acquire_timeout_seconds: 1,
         },
     };
     let http_client = HttpClient::new().expect("Failed to build test HttpClient");
-    AppState::new(settings, http_client)
+    let db_pool = create_pool_lazy(&settings.database).expect("Failed to build test DB pool");
+    AppState::new(settings, http_client, db_pool)
 }
 
 #[tokio::test]
@@ -77,14 +79,23 @@ async fn test_readiness_check_endpoint() {
 
     let response = app.oneshot(request).await.unwrap();
 
-    assert_eq!(response.status(), StatusCode::OK);
+    let status = response.status();
+    assert!(
+        status == StatusCode::OK || status == StatusCode::SERVICE_UNAVAILABLE,
+        "Expected OK or SERVICE_UNAVAILABLE, got {status}"
+    );
     assert!(response.headers().contains_key(&REQUEST_ID_HEADER));
 
     let body = response.into_body().collect().await.unwrap().to_bytes();
     let json: Value = serde_json::from_slice(&body).unwrap();
 
-    assert_eq!(json["success"], true);
-    assert_eq!(json["data"]["status"], "UP");
+    if status == StatusCode::OK {
+        assert_eq!(json["success"], true);
+        assert_eq!(json["data"]["database"], "CONNECTED");
+    } else {
+        assert_eq!(json["success"], false);
+        assert_eq!(json["error"]["code"], "DATABASE_UNAVAILABLE");
+    }
 }
 
 #[tokio::test]

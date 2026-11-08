@@ -3,20 +3,23 @@
 //! # Spring Boot Comparison
 //!
 //! In Spring Boot, `SpringApplication.run(Application.class, args)` discovers
-//! beans, sets up the embedded Tomcat/Netty container, hooks shutdown hooks,
-//! and starts listening for HTTP requests.
+//! beans, sets up the embedded Tomcat/Netty container, executes Flyway/Liquibase
+//! migrations, hooks shutdown hooks, and starts listening for HTTP requests.
 //!
 //! In Rust, `bootstrap::run()` performs these steps explicitly:
 //! 1. Loads configuration from environment variables
-//! 2. Initializes connection pools and HTTP clients
-//! 3. Constructs the Axum application router
-//! 4. Binds the Tokio TCP listener
-//! 5. Configures graceful shutdown via OS signals (SIGINT / SIGTERM)
+//! 2. Initializes connection pools and verifies PostgreSQL connectivity
+//! 3. Executes embedded SQL migrations (`sqlx::migrate!()`)
+//! 4. Initializes outbound HTTP client
+//! 5. Constructs the Axum application router with shared `AppState`
+//! 6. Binds the Tokio TCP listener
+//! 7. Configures graceful shutdown via OS signals (SIGINT / SIGTERM)
 
 use anyhow::{Context, Result};
 use tokio::net::TcpListener;
 
 use crate::config::settings::Settings;
+use crate::infrastructure::database::pool::{create_pool, run_migrations};
 use crate::infrastructure::external::http_client::HttpClient;
 use crate::interfaces::http::routes::create_router;
 use crate::interfaces::http::state::AppState;
@@ -33,23 +36,37 @@ pub async fn run() -> Result<()> {
         "Configuration loaded successfully"
     );
 
-    // 2. Initialize infrastructure dependencies
+    // 2. Initialize infrastructure dependencies: PostgreSQL connection pool
+    let db_pool = create_pool(&settings.database)
+        .await
+        .context("Failed to connect to PostgreSQL database")?;
+
+    tracing::info!("Connected to PostgreSQL connection pool successfully");
+
+    // 3. Run embedded database migrations automatically at startup
+    run_migrations(&db_pool)
+        .await
+        .context("Failed to run database migrations")?;
+
+    tracing::info!("Database migrations applied successfully");
+
+    // 4. Initialize outbound HTTP client
     let http_client = HttpClient::new().context("Failed to initialize outbound HTTP client")?;
 
-    // 3. Assemble shared application state
-    let app_state = AppState::new(settings, http_client);
+    // 5. Assemble shared application state
+    let app_state = AppState::new(settings, http_client, db_pool);
 
-    // 4. Build Axum router
+    // 6. Build Axum router
     let app = create_router(app_state);
 
-    // 5. Bind TCP listener with Tokio
+    // 7. Bind TCP listener with Tokio
     let listener = TcpListener::bind(&bind_addr)
         .await
         .with_context(|| format!("Failed to bind TCP listener to {bind_addr}"))?;
 
     tracing::info!("Server listening on http://{}", bind_addr);
 
-    // 6. Start server with graceful shutdown handling
+    // 8. Start server with graceful shutdown handling
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await
